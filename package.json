@@ -1,0 +1,27 @@
+{
+  "name": "ordermepizza",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "This project will utilize the Domino's API in order to automate orering pizza for me! I will simply type a command and my favorite pizza order will be sent to the local domino's.",
+  "main": "pizza.js",
+  "dependencies": {
+    "dominos": "^3.3.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.13.16",
+    "@babel/core": "^7.14.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JavaJonathan/OrderMePizza.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JavaJonathan/OrderMePizza/issues"
+  },
+  "homepage": "https://github.com/JavaJonathan/OrderMePizza#readme"
+}
