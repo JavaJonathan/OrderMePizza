@@ -1,4 +1,5 @@
-import { Order, Customer, Item, Payment, NearbyStores, Menu } from "dominos";
+import { Console } from "console";
+import { Order, Customer, Item, Payment, NearbyStores, Menu, Tracking } from "dominos";
 import * as readWrite from 'fs';
 import * as consoleReadline from 'readline';
 
@@ -11,6 +12,7 @@ let creditSecurityCode;
 let creditPostalCode;
 let userAddress;
 let email;
+let localStoreId;
 
 orderPizza();
 
@@ -23,11 +25,11 @@ async function orderPizza() {
     let weCanOrder = await canWeOrder(customer.address);
 
     if(!weCanOrder) {
-        console.log('Sorry - it looks we cannot place an order :(');
+        console.log('Sorry - it looks we cannot place an order 😥');
         return;
     }
 
-    let menu = await new Menu(4691);
+    let menu = await new Menu(parseInt(localStoreId));
     if(menu.menu.coupons.products['9193'] != undefined)
     {          
         const order=new Order(customer);
@@ -50,33 +52,43 @@ async function orderPizza() {
 
         if(userInput.toLowerCase() == 'n')
         {
-            console.log('Ok - I will not place your order. Script completed.');
+            console.log('Ok - I will not place your order. Script completed. ✔️');
             return;
         }
 
         await placeOrder(order);
+        await trackOrder();
+        Console.log('Script Completed. ✔️');
     }
-    else {
-        console.log('They do not currently have your favorite deal :( Ending script.')
+    else 
+    {
+        console.log('They do not currently have your favorite deal 😥 Ending script.');
         return;
     }
 }
 
 async function placeOrder(order) {   
 
-    console.log('Got it! Placing order...');
+    console.log('Got it! Placing order... 😀');
 
     try {
         await order.place();
     
-        console.log('\n\nOrder Placed\n\n');
+        console.log('\n\nOrder Placed 🍕\n\n');
         console.dir(order,{depth:3});    
     }
     catch(err) {
         console.trace(err);
         console.log(order.placeResponse);
-        console.log('Looks like the order failed with the reponse above..');
+        console.log('Looks like the order failed with the reponse above.. 😥');
     }
+}
+
+async function trackOrder()
+{
+    const tracking=new Tracking();
+    const trackingResult=await tracking.byPhone(phoneNumber);
+    console.log(`Your order will be ready in ${trackingResult.estimatedWaitMinutes} minutes - Enjoy! 😋`);
 }
 
 async function grabUserDetails() {
@@ -103,10 +115,11 @@ async function grabUserDetails() {
     creditPostalCode = details[0].CreditPostalCode;
     userAddress = details[0].Address;
     email = details[0].Email;
+    localStoreId = details[0].LocalStore;
 }
 
 async function askForUserInput(message) {
-    let response = ''
+    let response = '';
     const readLine = consoleReadline.createInterface({
         input: process.stdin,
         output: process.stdout
@@ -127,11 +140,7 @@ function addPaymentMethod(order) {
     const myCard=new Payment(
         {
             amount:order.amountsBreakdown.customer,
-            
-            // dashes are not needed, they get filtered out
             number: creditCardNumber,
-            
-            //slashes not needed, they get filtered out
             expiration: creditCardExpiration,
             securityCode: creditSecurityCode,
             postalCode: creditPostalCode,
@@ -196,7 +205,7 @@ async function buildOrder(order) {
     }
 
     order.addItem(pizza);
-    order.serviceMethod = 'Carryout'
+    order.serviceMethod = 'Carryout';
 }
 
 async function canWeOrder(orderAddress) {
@@ -209,15 +218,15 @@ async function canWeOrder(orderAddress) {
     nearbyStores.stores.forEach(store => 
     {
         //we only want to order from store number 4691
-        if(store.StoreID === '4691') {
+        if(store.StoreID === localStoreId) {
             if(store.IsOnlineCapable && store.IsOnlineNow && store.IsOpen && store.ServiceIsOpen.Carryout) {
                 weCanOrder = true;             
-                console.log(`Yay! Your store (${store.AddressDescription}) is open and they have your favorite deal! Building order...`);
+                console.log(`Yay! Your store is open and they have your favorite deal! Building order...`);
             }
         }
     });
 
-    return weCanOrder
+    return weCanOrder;
 }
 
 function getCustomerInfo() {
