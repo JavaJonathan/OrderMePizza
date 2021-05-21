@@ -14,6 +14,71 @@ let email;
 
 orderPizza();
 
+async function orderPizza() {
+
+    await grabUserDetails();
+    
+    const customer = getCustomerInfo();
+
+    let weCanOrder = await canWeOrder(customer.address);
+
+    if(!weCanOrder) {
+        console.log('Sorry - it looks we cannot place an order :(');
+        return;
+    }
+
+    let menu = await new Menu(4691);
+    if(menu.menu.coupons.products['9193'] != undefined)
+    {          
+        const order=new Order(customer);
+
+        await buildOrder(order);        
+        await order.validate();
+        await order.price();
+        addPaymentMethod(order);
+        //separates order from script text
+        console.log(order);   
+        console.log(`\n---------------------------------------`);  
+
+        //below you will see a hack in order to prepend javascript string interpolation with money signs
+        let userInput = await askForUserInput(`Domino's reports the wait time will be: ${order.estimatedWaitMinutes} minutes.
+        The total price of your order is: ${'$'}${order.amountsBreakdown.customer}        
+        You saved ${'$'}${order.amountsBreakdown.savings}
+        Please review full order above - if needed.
+        Would you like to place your order? Y or N: `
+        );
+
+        if(userInput.toLowerCase() == 'n')
+        {
+            console.log('Ok - I will not place your order. Script completed.');
+            return;
+        }
+
+        await placeOrder(order);
+    }
+    else {
+        console.log('They do not currently have your favorite deal :( Ending script.')
+        return;
+    }
+}
+
+async function placeOrder(order) {   
+
+    console.log('Got it! Placing order...');
+
+    try {
+        await order.place();
+    
+        console.log('\n\nOrder Placed\n\n');
+        console.dir(order,{depth:3});    
+    }
+    catch(err) {
+        console.trace(err);
+        console.log(order.placeResponse);
+        console.log('Looks like the order failed with the reponse above..');
+    }
+}
+
 async function grabUserDetails() {
     let details;
 
@@ -22,12 +87,12 @@ async function grabUserDetails() {
         if(error) throw error;
 
         details = JSON.parse(file);
-    })   
+    });   
 
     //we need to wait for the file to read - I tried running readFileSync, but I always encountered an error
     await new Promise((resolve) => {
         setTimeout(resolve, 1000);
-    })
+    });
 
     firstName = details[0].FirstName;
     lastName = details[0].LastName;
@@ -50,124 +115,88 @@ async function askForUserInput(message) {
     await new Promise(resolve => readLine.question(message, userResponse => {
         readLine.close();
         resolve(response = userResponse);
-      }));
+    }));
 
-      return response
+      return response;
 }
 
-async function orderPizza() {
 
-    await grabUserDetails();
-    
-    const customer = getCustomerInfo();
 
-    let weCanOrder = await canWeOrder(customer.address);
+function addPaymentMethod(order) {   
 
-    if(!weCanOrder) {
-        console.log('Sorry - it looks we cannot place an order :(')
-    }
-
-    console.log('Yay! Your store is open! I will place your order now.')
-
-    let menu = await new Menu(4691);
-    if(menu.menu.coupons.products['9193'] != undefined)
-    {
-        const order=new Order(customer);
-        order.storeID=4691;
-        order.coupons = [{Code: '9193'}];
-
-        const pizza=new Item(
-            {
-                //16 inch hand tossed crust
-                code:'12SCREEN',
-                options:{
-                    //sauce, whole pizza : normal
-                    X: {'1/1' : '1'}, 
-                    //cheese, whole pizza  : normal 
-                    C: {'1/1' : '1'},
-                    //pepperoni, whole pizza : normal 
-                    P: {'1/1' : '1'},
-                    //jalapeno, half pizza : normal 
-                    J: {'1/2': '1'},
-                    //bacon, half pizza : normal 
-                    K: {'2/2': '1'}
-                }
-            }
-        );
-
-        const cookieBrownie=new Item(
-            {                
-                code:'F_MRBRWNE'
-            }
-        );
-
-        const cheesyBread=new Item(
-            {                
-                code:'B8PCSCB'
-            }
-        );
-
-        const marinara=new Item(
-            {                
-                code:'MARINARA'
-            }
-        );
-
-        order.addItem(pizza);
-        order.addItem(cheesyBread);
-        order.serviceMethod = 'Carryout'
-        
-        await order.validate();
-        await order.price();
-
-        const myCard=new Payment(
-            {
-                amount:order.amountsBreakdown.customer,
-                
-                // dashes are not needed, they get filtered out
-                number:'4100-1234-2234-3234',
-                
-                //slashes not needed, they get filtered out
-                expiration:'01/35',
-                securityCode:'867',
-                postalCode:'93940',
-                tipAmount:0
-            }
-        )
-        order.payments.push(myCard);     
-
-        let userInput = await askForUserInput(`Domino's reports the wait time will be: ${order.estimatedWaitMinutes}. Would you like to place your order? Y or N: `);
-
-        if(userInput.toLowerCase() == 'n')
+    const myCard=new Payment(
         {
-            console.log('Ok - I will not place your order. Script completed.')
-            return
+            amount:order.amountsBreakdown.customer,
+            
+            // dashes are not needed, they get filtered out
+            number: creditCardNumber,
+            
+            //slashes not needed, they get filtered out
+            expiration: creditCardExpiration,
+            securityCode: creditSecurityCode,
+            postalCode: creditPostalCode,
+            tipAmount: 0
         }
+    )
+    
+    order.payments.push(myCard);  
+}
 
-        console.log(order);
+async function buildOrder(order) {
 
-        // try {
-        //     //will throw a dominos error because
-        //     //we used a fake credit card
-        //     await order.place();
-        
-        //     console.log('\n\nPlaced Order\n\n');
-        //     console.dir(order,{depth:3});
-        
-        // }
-        // catch(err) {
-        //     console.trace(err);
-        
-        //     //inspect Order Response to see more information about the 
-        //     //failure, unless you added a real card, then you can inspect
-        //     //the order itself
-        //     console.log('\n\nFailed Order Probably Bad Card, here is order.priceResponse the raw response from Dominos\n\n');
-        //     console.dir(
-        //         order.placeResponse,
-        //         {depth:5}
-        //     );
-        // }
+    order.storeID=4691;
+    order.coupons = [{Code: '9193'}];
+
+    const pizza=new Item(
+        {
+            //12 inch hand tossed crust
+            code:'12SCREEN',
+            options:{
+                //sauce, whole pizza : normal
+                X: {'1/1' : '1'}, 
+                //cheese, whole pizza  : normal 
+                C: {'1/1' : '1'},
+                //pepperoni, whole pizza : normal 
+                P: {'1/1' : '1'},
+                //jalapeno, half pizza : normal 
+                J: {'1/2': '1'},
+                //bacon, half pizza : normal 
+                K: {'2/2': '1'}
+            }
+        }
+    );
+
+    const cookieBrownie=new Item(
+        {                
+            code:'F_MRBRWNE'
+        }
+    );
+
+    const cheesyBread=new Item(
+        {                
+            code:'B8PCSCB'
+        }
+    );
+
+    const marinara=new Item(
+        {                
+            code:'MARINARA'
+        }
+    );
+
+    let userInput = await askForUserInput('Would you like the Cookie Brownie or Cheesy Bread? Type Bread or Cookie: ');
+    console.log('Got it! Finishing up building the order...')
+
+    switch(userInput.toLowerCase().trim()) {
+        case 'cookie': order.addItem(cookieBrownie); break;
+        case 'bread': 
+        order.addItem(cheesyBread);
+        order.addItem(marinara);
+        break;
     }
+
+    order.addItem(pizza);
+    order.serviceMethod = 'Carryout'
 }
 
 async function canWeOrder(orderAddress) {
@@ -176,14 +205,14 @@ async function canWeOrder(orderAddress) {
     
     let weCanOrder = false;
 
-    //we can change this to a traditional for loop in order to break once we find our store for performce, will implement at a later time
+    //we can change this to a traditional for loop in order to break once we find our store for performance, will implement at a later time
     nearbyStores.stores.forEach(store => 
     {
         //we only want to order from store number 4691
-        if(store.StoreID === '4691')
-        {
-            if(store.IsOnlineCapable && store.IsDeliveryStore && store.IsOpen && store.ServiceIsOpen.Delivery) {
-                weCanOrder = true;
+        if(store.StoreID === '4691') {
+            if(store.IsOnlineCapable && store.IsOnlineNow && store.IsOpen && store.ServiceIsOpen.Carryout) {
+                weCanOrder = true;             
+                console.log(`Yay! Your store (${store.AddressDescription}) is open and they have your favorite deal! Building order...`);
             }
         }
     });
